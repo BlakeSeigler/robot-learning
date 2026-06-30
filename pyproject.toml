@@ -8,4 +8,6 @@ dependencies = [
     "numpy>=2.2.6",
     "pybullet>=3.2.7",
     "torch>=2.12.0",
+    "transformers>=5.12.1",
+    "xarm-python-sdk>=1.18.4",
 ]

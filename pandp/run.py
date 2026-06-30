@@ -15,9 +15,7 @@ IP = "192.168.1.198"
 
 # I need to quantize the model to run it
 bnb = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_quant_type="nf4",
+    load_in_8bit=True,
 )
 
 # copied model -- OpenVLA base no fine tuning

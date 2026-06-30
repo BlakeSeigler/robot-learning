@@ -15,11 +15,13 @@ dependencies = [
     "pybullet>=3.2.7",
     "pyrealsense2>=2.58.2.10647",
     "xarm-python-sdk>=1.18.4",
-    "accelerate>=1.14.0",
+    "accelerate==0.32.1",
+    "torchvision>=0.22.0",
 ]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

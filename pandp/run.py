@@ -40,7 +40,7 @@ robot = XArmAPI(IP)
 robot.motion_enable(True)
 robot.set_mode(0)
 robot.set_state(0)
-robot.gripper_enable(True)
+robot.set_gripper_enable(True)
 
 # camera
 camera = Camera()

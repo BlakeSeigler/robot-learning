@@ -3,7 +3,7 @@
 # -------
 
 import torch
-from transformers import AutoProcessor
+from transformers import AutoProcessor, BitsAndBytesConfig
 from PIL import Image
 from xarm import XArmAPI 
 
@@ -13,6 +13,13 @@ from camera import Camera
 PROMPT = "In: What action should the robot take to put the blue block in the box?\nOut:"
 IP = "192.168.1.198"
 
+# I need to quantize the model to run it
+bnb = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_quant_type="nf4",
+)
+
 # copied model -- OpenVLA base no fine tuning
 from transformers import AutoModelForVision2Seq
 vla = AutoModelForVision2Seq.from_pretrained(
@@ -20,7 +27,9 @@ vla = AutoModelForVision2Seq.from_pretrained(
     trust_remote_code=True,
     torch_dtype=torch.bfloat16,
     low_cpu_mem_usage=True,
-).to("cuda:0")
+    quantization_config=bnb,
+    device_map="auto",
+)
 
 # this is for 
 processor = AutoProcessor.from_pretrained(

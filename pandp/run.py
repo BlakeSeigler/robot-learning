@@ -10,7 +10,7 @@ from xarm import XArmAPI
 # Me implemented
 from camera import Camera
 
-PROMPT = "In: What action should the robot take to put the blue block in the box?\nOut:"
+PROMPT = "In: What action should the robot take to put the blue block in the cardboard box?\nOut:"
 IP = "192.168.1.198"
 
 # I need to quantize the model to run it

@@ -2,7 +2,7 @@ i want to pickup and set down a block.
 
 For this demonstration I'll be using a VLA that is fine-tuned using RL (I'm thinking SAC)
 
-For vision I'll be doing birds eye camera and/or wrist mounted camera -- i haven't decided yet
+For vision I'll be doing a wrist mounted camera
 
 
 

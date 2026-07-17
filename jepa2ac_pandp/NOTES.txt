@@ -1,0 +1,129 @@
+VJEPA2 DEMO NOTES (notebooks/vjepa2_demo.py)
+==============================================
+
+1. CHECKPOINT DICT FORMAT
+--------------------------
+The .pt checkpoint is a plain dict saved with torch.save(), roughly:
+
+    {
+        "encoder": {...state_dict...},              # ViT encoder weights
+        "predictor": {...state_dict...},             # JEPA predictor (pretraining/world-model, unused at inference)
+        "classifiers": [{...state_dict...}, ...],    # one or more attentive-probe heads trained on the frozen encoder
+        ... # optimizer state, epoch, etc.
+    }
+
+Why: V-JEPA training produces multiple modules (encoder + predictor), and separately
+people train small "probe" heads on top of the frozen encoder for specific downstream
+tasks. Bundling them under named keys lets one checkpoint file serve multiple loading
+needs - grab ["encoder"] for just the backbone, or ["classifiers"][0] for a probe head.
+
+2. BACKBONE vs CLASSIFIER
+--------------------------
+Only the encoder is the "backbone." The classifier is NOT a backbone.
+
+- Backbone / encoder (vit_giant_xformers_rope) = the big ViT that turns raw video into
+  patch feature vectors. Expensive, pretrained, frozen part.
+- Classifier / probe head (AttentiveClassifier) = a small trainable module bolted on
+  after the backbone. Takes the backbone's output features and maps them to class
+  logits (174 SSV2 action classes in the demo). Lightweight, task-specific.
+
+load_pretrained_vjepa_pt_weights() strips a "backbone." prefix because during training
+the encoder was wrapped inside a larger module (e.g. something.backbone.blocks...), so
+its saved keys have that prefix baked in. The classifier's state_dict never had that
+prefix, which is why load_pretrained_vjepa_classifier_weights() doesn't strip it.
+
+3. THE key-RENAMING LINES
+--------------------------
+    pretrained_dict = {k.replace("module.", ""): v for k, v in pretrained_dict.items()}
+    pretrained_dict = {k.replace("backbone.", ""): v for k, v in pretrained_dict.items()}
+
+Yes - just rebuilding the same state_dict with modified key strings so they match the
+current model's parameter names:
+  - "module." prefix comes from DistributedDataParallel/DataParallel wrapping during
+    training - stripped so keys match the unwrapped model.
+  - "backbone." prefix comes from whatever wrapper module held the encoder during
+    training - stripped so keys match the bare VisionTransformer.
+
+strict=False tolerates any remaining mismatches instead of erroring; the returned msg
+tells you what was missing/unexpected (worth reading it once to confirm nothing
+important failed to load).
+
+4/5. out_patch_features_hf vs out_patch_features_pt
+------------------------------------------------------
+The demo runs the SAME video through two independently-implemented versions of the
+same encoder to prove they're equivalent:
+
+  - model_pt: the raw PyTorch model from this repo (vit_giant_xformers_rope), weights
+    loaded manually via load_pretrained_vjepa_pt_weights.
+  - model_hf: the HuggingFace transformers port of the same model
+    (AutoModel.from_pretrained("facebook/vjepa2-vitg-fpc64-384")), weights loaded
+    automatically by HF.
+
+Both output patch-wise features (one feature vector per spatiotemporal patch, from the
+last encoder layer) - same architecture, same weights, two codebases. The demo then
+checks:
+
+    torch.allclose(out_patch_features_pt, out_patch_features_hf, atol=1e-3, rtol=1e-3)
+
+The difference SHOULD be ~0 - this is a correctness check that the local PT weights and
+the HF checkpoint agree numerically, not an expected discrepancy.
+
+6. TRANSFORMS
+--------------
+Two separate preprocessing pipelines because each model expects input preprocessed by
+its own library's convention:
+
+  - pt_transform (build_pt_video_transform): resize -> center-crop -> to-tensor ->
+    normalize, using this repo's own video_transforms/volume_transforms utils, shaped
+    for model_pt.
+  - hf_transform (AutoVideoProcessor.from_pretrained(hf_model_name)): HuggingFace's own
+    processor for that model, returns pixel_values_videos.
+
+Both are applied to the identical raw video frames so the two models get input as close
+as possible to identical - required for the allclose check above to be meaningful.
+
+7. AttentiveClassifier and vit_giant_xformers_rope
+----------------------------------------------------
+  - vit_giant_xformers_rope (src/models/vision_transformer.py): factory function that
+    builds the "ViT-giant" backbone variant using xFormers attention kernels and RoPE
+    (rotary position embeddings). This IS the encoder/backbone.
+  - AttentiveClassifier (src/models/attentive_pooler.py): wraps an AttentivePooler (a
+    learned query + cross-attention block that pools variable-length patch features
+    into a fixed-size vector) plus a linear head on top, producing class logits. This is
+    the probe head that consumes the backbone's frozen output.
+
+8. LOADING THE CLASSIFIER + ITS WEIGHTS
+-----------------------------------------
+    classifier_model_path = "YOUR_ATTENTIVE_PROBE_PATH"
+    classifier = AttentiveClassifier(
+        embed_dim=model_pt.embed_dim,  # must match the backbone's feature dim
+        num_heads=16,
+        depth=4,
+        num_classes=174,               # SSV2 has 174 action classes
+    ).cuda().eval()
+    load_pretrained_vjepa_classifier_weights(classifier, classifier_model_path)
+
+Steps:
+  1. Construct an UNTRAINED AttentiveClassifier with the right shape (embed_dim must
+     match the backbone output dim, num_classes must match what the checkpoint was
+     trained for).
+  2. load_pretrained_vjepa_classifier_weights reads checkpoint["classifiers"][0],
+     strips "module.", and calls classifier.load_state_dict(...) to fill in those
+     freshly-constructed layers with the pretrained probe's actual weights.
+
+Point classifier_model_path at whatever .pt file holds the pretrained attentive-probe
+checkpoint for SSV2 (Meta released one alongside the VJEPA2 encoder checkpoints).
+
+9. WHAT IS SSV2?
+------------------
+SSV2 = "Something-Something V2", a video action-recognition dataset (174 fine-grained
+action classes, e.g. "pushing something from left to right"). Nothing to do with
+"JEPA2" as a version number - unrelated dataset name that coincidentally also has a
+"V2" in it.
+
+It shows up here because this demo isn't just the JEPA2 encoder in isolation - it's a
+full example pipeline: frozen JEPA2 backbone -> attentive probe -> classification, and
+the specific pretrained probe Meta shipped for the demo happens to have been trained on
+SSV2. Swap in a different pretrained probe (e.g. trained on Kinetics or a custom task)
+and you'd use that task's class list instead of ssv2_classes.json. The JEPA2 encoder
+itself is task-agnostic; SSV2 is just the demo's downstream task.

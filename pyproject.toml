@@ -1,5 +1,5 @@
 [project]
-name = "blake"
+name = "robot-learn"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -17,6 +17,7 @@ dependencies = [
     "xarm-python-sdk>=1.18.4",
     "accelerate==0.32.1",
     "torchvision>=0.22.0",
+    "einops>=0.8.2",
 ]
 
 [tool.uv.sources]

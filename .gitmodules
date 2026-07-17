@@ -1,3 +1,6 @@
-[submodule "pybullet/deps/uf-gym"]
-	path = pybullet/deps/uf-gym
-	url = https://github.com/xArm-Developer/uf-gym.git
+[submodule "openvla_pandp/openvla"]
+	path = openvla_pandp/openvla
+	url = https://github.com/openvla/openvla.git
+[submodule "jepa2ac_pandp/vjepa2"]
+	path = jepa2ac_pandp/vjepa2
+	url = https://github.com/BlakeSeigler/vjepa2.git
